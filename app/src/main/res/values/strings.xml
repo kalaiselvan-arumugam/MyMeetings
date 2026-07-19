@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">MyMeetings</string>
+    <string name="tile_label">Scan Meeting</string>
+</resources>
