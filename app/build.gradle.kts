@@ -24,6 +24,9 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
+
+
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -39,6 +42,14 @@ android {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
       }
+    }
+}
+
+// Rename the generated APKs
+android.applicationVariants.all { variant ->
+    variant.outputs.all { output ->
+        val outputImpl = output as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+        outputImpl.outputFileName = if (variant.buildType.name == "release") "MyMeetings.apk" else "MyMeetings-${variant.buildType.name}.apk"
     }
 }
 
