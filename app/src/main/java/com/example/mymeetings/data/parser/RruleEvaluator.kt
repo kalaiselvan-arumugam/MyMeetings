@@ -42,6 +42,10 @@ object RruleEvaluator {
         val byDay = rruleMap["BYDAY"]?.split(",")
         val byMonthDay = rruleMap["BYMONTHDAY"]?.split(",")?.mapNotNull { it.toIntOrNull() }
 
+        // For WEEKLY+BYDAY, we need to track week-offset from start to enforce INTERVAL.
+        // We use ISO week number delta: weeks are counted from the start week.
+        val startWeekEpochDay = startDateTime.toLocalDate().toEpochDay() / 7
+
         var current = startDateTime
         var occurrencesCount = 0
 
@@ -67,7 +71,15 @@ object RruleEvaluator {
             var matches = true
             if (byDay != null && freq == "WEEKLY") {
                 val currentDayStr = current.dayOfWeek.name.take(2) // e.g. "MO", "TU"
-                matches = byDay.contains(currentDayStr)
+                val dayMatches = byDay.contains(currentDayStr)
+
+                // Also check that the current week satisfies the INTERVAL.
+                // E.g. INTERVAL=2 means only emit in the same week as start, start+2 weeks, start+4 weeks, etc.
+                val currentWeekEpochDay = current.toLocalDate().toEpochDay() / 7
+                val weekOffset = (currentWeekEpochDay - startWeekEpochDay).toInt()
+                val intervalMatches = weekOffset >= 0 && weekOffset % interval == 0
+
+                matches = dayMatches && intervalMatches
             }
             if (byMonthDay != null) {
                 matches = matches && byMonthDay.contains(current.dayOfMonth)
@@ -93,8 +105,8 @@ object RruleEvaluator {
             current = when (freq) {
                 "DAILY" -> current.plusDays(interval.toLong())
                 "WEEKLY" -> {
-                    // If BYDAY is specified, we move day by day to check matches,
-                    // otherwise we jump by intervals of weeks.
+                    // If BYDAY is specified, we move day by day to check matches against
+                    // the byDay list and the interval guard above.
                     if (byDay != null) {
                         current.plusDays(1)
                     } else {

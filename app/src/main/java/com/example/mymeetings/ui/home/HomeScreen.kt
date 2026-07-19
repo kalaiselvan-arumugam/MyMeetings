@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.layout
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mymeetings.data.parser.RruleEvaluator
 import com.example.mymeetings.domain.model.Meeting
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -383,6 +384,10 @@ fun MeetingItemCard(
                     )
                 }
 
+                // Day-of-week pill indicators
+                Spacer(modifier = Modifier.height(4.dp))
+                WeekDayChips(meeting = meeting, accentColor = colorAccent)
+
                 // Organizer details
                 meeting.organizer?.let {
                     Text(
@@ -426,6 +431,112 @@ fun MeetingItemCard(
 // Float custom shape helper
 @Composable
 fun FloatingCornerShape() = RoundedCornerShape(16.dp)
+
+/**
+ * Displays Su Mo Tu We Th Fr Sa as small circular chips.
+ * - For recurring meetings with BYDAY: marks those days.
+ * - For single meetings: marks only the day-of-week of startTime.
+ * - Filled accent circle = day is part of the pattern AND occurs in the next 7 days.
+ * - Outlined dim circle = day is part of pattern but NOT in next 7 days.
+ * - Plain dim text = day is not part of the pattern.
+ */
+@Composable
+fun WeekDayChips(meeting: Meeting, accentColor: Color) {
+    // All weekdays in display order (Sun first)
+    val allDays = listOf(
+        DayOfWeek.SUNDAY,
+        DayOfWeek.MONDAY,
+        DayOfWeek.TUESDAY,
+        DayOfWeek.WEDNESDAY,
+        DayOfWeek.THURSDAY,
+        DayOfWeek.FRIDAY,
+        DayOfWeek.SATURDAY
+    )
+    val labels = listOf("Su", "Mo", "Tu", "We", "Th", "Fr", "Sa")
+
+    // Parse which days are "active" in the meeting pattern
+    val rruleDays: Set<DayOfWeek> = if (!meeting.rrule.isNullOrBlank()) {
+        val byDayStr = meeting.rrule
+            .split(";")
+            .firstOrNull { it.trim().startsWith("BYDAY", ignoreCase = true) }
+            ?.substringAfter("=")
+        byDayStr?.split(",")?.mapNotNull { token ->
+            when (token.trim().uppercase().takeLast(2)) {
+                "SU" -> DayOfWeek.SUNDAY
+                "MO" -> DayOfWeek.MONDAY
+                "TU" -> DayOfWeek.TUESDAY
+                "WE" -> DayOfWeek.WEDNESDAY
+                "TH" -> DayOfWeek.THURSDAY
+                "FR" -> DayOfWeek.FRIDAY
+                "SA" -> DayOfWeek.SATURDAY
+                else -> null
+            }
+        }?.toSet() ?: emptySet()
+    } else {
+        // Single meeting — only the day of startTime
+        val startDay = Instant.ofEpochMilli(meeting.startTime)
+            .atZone(ZoneId.systemDefault())
+            .dayOfWeek
+        setOf(startDay)
+    }
+
+    // Compute which active days fall within the next 7 days
+    val today = LocalDate.now()
+    val next7Days = (0L..6L).map { today.plusDays(it) }
+    val highlightedDays: Set<DayOfWeek> = next7Days
+        .filter { rruleDays.contains(it.dayOfWeek) }
+        .map { it.dayOfWeek }
+        .toSet()
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)
+    ) {
+        allDays.forEachIndexed { index, day ->
+            val isActive = rruleDays.contains(day)
+            val isHighlighted = highlightedDays.contains(day)
+
+            val circleColor = when {
+                isHighlighted -> accentColor
+                isActive      -> accentColor.copy(alpha = 0.25f)
+                else          -> Color.Transparent
+            }
+            val textColor = when {
+                isHighlighted -> Color.White
+                isActive      -> accentColor
+                else          -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+            }
+            val borderColor = when {
+                isHighlighted -> Color.Transparent
+                isActive      -> accentColor.copy(alpha = 0.5f)
+                else          -> Color.Transparent
+            }
+
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(circleColor)
+                    .then(
+                        if (isActive && !isHighlighted)
+                            Modifier.background(accentColor.copy(alpha = 0.15f), CircleShape)
+                        else
+                            Modifier
+                    )
+            ) {
+                Text(
+                    text = labels[index],
+                    fontSize = 8.sp,
+                    fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Normal,
+                    color = textColor,
+                    lineHeight = 8.sp
+                )
+            }
+        }
+    }
+}
 
 fun getNextOccurrenceTime(meeting: Meeting): Long {
     val now = System.currentTimeMillis()

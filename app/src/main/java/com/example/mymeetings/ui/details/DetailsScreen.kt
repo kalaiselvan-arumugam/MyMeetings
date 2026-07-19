@@ -427,8 +427,12 @@ fun DetailsScreen(
                         
                         val importFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm a")
                             .withZone(ZoneId.systemDefault())
+                        val eventDateFormatter = DateTimeFormatter.ofPattern("EEE, MMM dd yyyy, hh:mm a")
+                            .withZone(ZoneId.systemDefault())
                         val importDate = importFormatter.format(Instant.ofEpochMilli(meeting.creationDate))
 
+                        StatRow(label = "Event Start", value = eventDateFormatter.format(Instant.ofEpochMilli(meeting.startTime)))
+                        StatRow(label = "Event End", value = eventDateFormatter.format(Instant.ofEpochMilli(meeting.endTime)))
                         StatRow(label = "Import Date", value = importDate)
                         StatRow(label = "Imported From", value = meeting.importedFrom)
                         StatRow(label = "Times Joined", value = meeting.timesJoined.toString())
