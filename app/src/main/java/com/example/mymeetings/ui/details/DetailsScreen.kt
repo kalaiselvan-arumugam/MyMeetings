@@ -242,8 +242,8 @@ fun DetailsScreen(
                     }
                 }
 
-                // Meeting ID & Passcode Section
-                if (!meeting.meetingId.isNullOrBlank()) {
+                // Meeting Credentials Section (URL + ID + Passcode)
+                if (!meeting.meetingId.isNullOrBlank() || !meeting.meetingUrl.isNullOrBlank()) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -259,47 +259,80 @@ fun DetailsScreen(
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text("Meeting ID", style = MaterialTheme.typography.labelMedium)
-                                    Text(
-                                        meeting.meetingId,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                                TextButton(onClick = {
-                                    copyToClipboard(context, "Meeting ID", meeting.meetingId)
-                                    Toast.makeText(context, "ID copied!", Toast.LENGTH_SHORT).show()
-                                }) {
-                                    Text("Copy")
+
+                            // Join URL row
+                            if (!meeting.meetingUrl.isNullOrBlank()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Join URL", style = MaterialTheme.typography.labelMedium)
+                                        Text(
+                                            meeting.meetingUrl,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            maxLines = 2,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    TextButton(onClick = {
+                                        copyToClipboard(context, "Join URL", meeting.meetingUrl)
+                                        Toast.makeText(context, "URL copied!", Toast.LENGTH_SHORT).show()
+                                    }) {
+                                        Text("Copy")
+                                    }
                                 }
                             }
-                            Divider(modifier = Modifier.padding(vertical = 8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text("Passcode", style = MaterialTheme.typography.labelMedium)
-                                    Text(
-                                        meeting.passcode ?: "-",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Medium
-                                    )
+
+                            // Meeting ID row
+                            if (!meeting.meetingId.isNullOrBlank()) {
+                                if (!meeting.meetingUrl.isNullOrBlank()) {
+                                    Divider(modifier = Modifier.padding(vertical = 8.dp))
                                 }
-                                TextButton(onClick = {
-                                    meeting.passcode?.let {
-                                        copyToClipboard(context, "Passcode", it)
-                                        Toast.makeText(context, "Passcode copied!", Toast.LENGTH_SHORT).show()
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("Meeting ID", style = MaterialTheme.typography.labelMedium)
+                                        Text(
+                                            meeting.meetingId,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
-                                }, enabled = !meeting.passcode.isNullOrBlank()) {
-                                    Text("Copy")
+                                    TextButton(onClick = {
+                                        copyToClipboard(context, "Meeting ID", meeting.meetingId)
+                                        Toast.makeText(context, "ID copied!", Toast.LENGTH_SHORT).show()
+                                    }) {
+                                        Text("Copy")
+                                    }
+                                }
+                                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("Passcode", style = MaterialTheme.typography.labelMedium)
+                                        Text(
+                                            meeting.passcode ?: "-",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                    TextButton(onClick = {
+                                        meeting.passcode?.let {
+                                            copyToClipboard(context, "Passcode", it)
+                                            Toast.makeText(context, "Passcode copied!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }, enabled = !meeting.passcode.isNullOrBlank()) {
+                                        Text("Copy")
+                                    }
                                 }
                             }
                         }
