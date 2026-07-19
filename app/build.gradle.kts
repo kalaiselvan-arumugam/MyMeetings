@@ -1,3 +1,5 @@
+
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -45,13 +47,7 @@ android {
     }
 }
 
-// Rename the generated APKs
-android.applicationVariants.all { variant ->
-    variant.outputs.all { output ->
-        val outputImpl = output as com.android.build.gradle.internal.api.BaseVariantOutputImpl
-        outputImpl.outputFileName = if (variant.buildType.name == "release") "MyMeetings.apk" else "MyMeetings-${variant.buildType.name}.apk"
-    }
-}
+base.archivesName.set("MyMeetings")
 
 kotlin {
     jvmToolchain(17)
