@@ -103,35 +103,40 @@ object IcsParser {
 
     /**
      * Resolves a timezone ID string (IANA or Windows) to a ZoneId.
-     * Falls back to systemDefault() if the ID is unknown.
+     *
+     * Resolution order:
+     *   1. Try java.time.ZoneId.of() directly (works for all IANA IDs)
+     *   2. Try android.icu.util.TimeZone.getIDForWindowsID() — covers ALL
+     *      Windows timezone IDs built into Android (API 24+, minSdk = 29)
+     *   3. Fall back to the manual WINDOWS_TO_IANA map for any edge cases
+     *   4. Last resort: device's systemDefault()
      */
     private fun resolveZoneId(tzid: String?): ZoneId {
         if (tzid.isNullOrBlank()) return ZoneId.systemDefault()
-        // Try IANA first (fast path)
-        return try {
-            ZoneId.of(tzid)
-        } catch (e: Exception) {
-            // Try Windows → IANA mapping
-            val ianaId = WINDOWS_TO_IANA[tzid]
-            if (ianaId != null) {
-                try { ZoneId.of(ianaId) } catch (e2: Exception) { ZoneId.systemDefault() }
-            } else {
-                ZoneId.systemDefault()
-            }
+        // 1. Try IANA directly (fast path — covers all standard IANA IDs)
+        try { return ZoneId.of(tzid) } catch (_: Exception) {}
+        // 2. Android ICU — covers 100% of Windows timezone IDs
+        try {
+            val icuId = android.icu.util.TimeZone.getIDForWindowsID(tzid, null)
+            if (!icuId.isNullOrBlank()) return ZoneId.of(icuId)
+        } catch (_: Exception) {}
+        // 3. Manual fallback map
+        val ianaId = WINDOWS_TO_IANA[tzid]
+        if (ianaId != null) {
+            try { return ZoneId.of(ianaId) } catch (_: Exception) {}
         }
+        // 4. Give up — use device default
+        return ZoneId.systemDefault()
     }
 
     /**
-     * Resolves a raw timezone ID string to its canonical IANA string.
-     * If a Windows ID is given, returns the mapped IANA string.
+     * Resolves a raw timezone ID to its canonical IANA string representation.
+     * Used to store a clean, parseable timezone in the Meeting model so that
+     * RruleEvaluator and display formatters always receive a valid IANA ID.
      */
     private fun resolveIanaId(tzid: String?): String {
         if (tzid.isNullOrBlank()) return ZoneId.systemDefault().id
-        return try {
-            ZoneId.of(tzid).id   // Already IANA — return canonical form
-        } catch (e: Exception) {
-            WINDOWS_TO_IANA[tzid] ?: ZoneId.systemDefault().id
-        }
+        return resolveZoneId(tzid).id
     }
 
     // -------------------------------------------------------------------------
