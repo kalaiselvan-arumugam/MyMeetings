@@ -540,8 +540,12 @@ fun WeekDayChips(meeting: Meeting, accentColor: Color) {
 
 fun getNextOccurrenceTime(meeting: Meeting): Long {
     val now = System.currentTimeMillis()
+    val zoneId = ZoneId.systemDefault()
+    val startOfToday = LocalDate.now().atStartOfDay(zoneId).toInstant().toEpochMilli()
     val endOfTime = now + 365L * 24 * 60 * 60 * 1000
-    val occurrences = RruleEvaluator.getOccurrences(meeting, now, endOfTime)
+    
+    // Evaluate starting from the beginning of today, so meetings happening later today are displayed.
+    val occurrences = RruleEvaluator.getOccurrences(meeting, startOfToday, endOfTime)
     return occurrences.firstOrNull() ?: meeting.startTime
 }
 
