@@ -41,10 +41,11 @@ fun SettingsScreen(
     val context = LocalContext.current
     val defaultGuestName by viewModel.defaultGuestName.collectAsStateWithLifecycle()
     val ringtoneUri by viewModel.alarmRingtoneUri.collectAsStateWithLifecycle()
+    val silentModeBypass by viewModel.silentModeBypass.collectAsStateWithLifecycle()
+    val alarmVibrationEnabled by viewModel.alarmVibrationEnabled.collectAsStateWithLifecycle()
+    val alarmVibrationPattern by viewModel.alarmVibrationPattern.collectAsStateWithLifecycle()
 
-    var isOptimizedIgnored by remember {
-        mutableStateOf(isIgnoringBatteryOptimizations(context))
-    }
+    var showVibrationPatternMenu by remember { mutableStateOf(false) }
 
     // Ringtone Picker Launcher
     val ringtonePickerLauncher = rememberLauncherForActivityResult(
@@ -130,49 +131,51 @@ fun SettingsScreen(
                 }
             )
 
-            // Battery Optimization Widget
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isOptimizedIgnored) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "Battery Optimization",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
+            // Silent Mode Bypass Switch
+            ListItem(
+                headlineContent = { Text("Bypass Silent / DND Mode") },
+                supportingContent = { Text("Play meeting alert ringtones even when phone is set to silent or Do Not Disturb.") },
+                trailingContent = {
+                    Switch(
+                        checked = silentModeBypass,
+                        onCheckedChange = { viewModel.updateSilentModeBypass(it) }
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        if (isOptimizedIgnored) {
-                            "Background reminders are optimized. Device battery optimizations are disabled."
-                        } else {
-                            "MIUI/HyperOS or Chinese ROMs may block alerts. Please disable battery optimization to guarantee alarm reliability."
-                        },
-                        style = MaterialTheme.typography.bodyMedium
+                }
+            )
+
+            // Alarm Vibration Switch
+            ListItem(
+                headlineContent = { Text("Alarm Vibration") },
+                supportingContent = { Text("Vibrate phone during meeting alerts.") },
+                trailingContent = {
+                    Switch(
+                        checked = alarmVibrationEnabled,
+                        onCheckedChange = { viewModel.updateAlarmVibrationEnabled(it) }
                     )
-                    if (!isOptimizedIgnored && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = {
-                                try {
-                                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                        data = Uri.parse("package:${context.packageName}")
-                                    }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    // Fallback to general battery settings
-                                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                                    context.startActivity(intent)
+                }
+            )
+
+            // Vibration Pattern Selection (visible if vibration is enabled)
+            if (alarmVibrationEnabled) {
+                Box {
+                    ListItem(
+                        headlineContent = { Text("Vibration Pattern") },
+                        supportingContent = { Text(alarmVibrationPattern) },
+                        trailingContent = { Icon(Icons.Default.KeyboardArrowRight, contentDescription = null) },
+                        modifier = Modifier.clickable { showVibrationPatternMenu = true }
+                    )
+                    DropdownMenu(
+                        expanded = showVibrationPatternMenu,
+                        onDismissRequest = { showVibrationPatternMenu = false }
+                    ) {
+                        listOf("Default", "Heartbeat", "Fast").forEach { pattern ->
+                            DropdownMenuItem(
+                                text = { Text(pattern) },
+                                onClick = {
+                                    viewModel.updateAlarmVibrationPattern(pattern)
+                                    showVibrationPatternMenu = false
                                 }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error
                             )
-                        ) {
-                            Text("Disable Optimizations")
                         }
                     }
                 }
