@@ -249,7 +249,9 @@ object IcsParser {
             val key = paramParts[0].uppercase()
             val params = paramParts.drop(1).associate {
                 val kv = it.split("=", limit = 2)
-                if (kv.size == 2) kv[0].uppercase() to kv[1] else "" to ""
+                // RFC 5545 allows quoted parameter values: TZID="Singapore Standard Time"
+                // Strip surrounding quotes so downstream lookups work correctly.
+                if (kv.size == 2) kv[0].uppercase() to kv[1].removeSurrounding("\"") else "" to ""
             }
 
             when (key) {

@@ -395,18 +395,104 @@ fun DetailsScreen(
 
                 // Organizer details
                 meeting.organizer?.let {
-                    Text(
-                        text = "Host / Organizer",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
-                    )
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Host / Organizer",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                // Recurrence Details (Effective From & Until)
+                if (!meeting.rrule.isNullOrBlank()) {
+                    val rruleMap = try {
+                        meeting.rrule.split(";").associate {
+                            val parts = it.split("=", limit = 2)
+                            if (parts.size == 2) parts[0].uppercase() to parts[1] else "" to ""
+                        }
+                    } catch (e: Exception) {
+                        emptyMap()
+                    }
+                    val untilStr = rruleMap["UNTIL"]
+                    val countStr = rruleMap["COUNT"]
+
+                    val eventDateFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM dd, yyyy")
+                        .withZone(ZoneId.systemDefault())
+
+                    val startStrFormatted = eventDateFormatter.format(Instant.ofEpochMilli(meeting.startTime))
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Recurrence Period",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Effective From: $startStrFormatted",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if (!untilStr.isNullOrBlank()) {
+                                val untilZoneId = try { ZoneId.of(meeting.timeZone) } catch(e: Exception) { ZoneId.systemDefault() }
+                                val untilClean = untilStr.replace("Z", "")
+                                val formatter = if (untilClean.contains("T")) {
+                                    DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")
+                                } else {
+                                    DateTimeFormatter.ofPattern("yyyyMMdd")
+                                }
+                                val untilMillis = try {
+                                    if (untilClean.contains("T")) {
+                                        java.time.LocalDateTime.parse(untilClean, formatter).atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+                                    } else {
+                                        java.time.LocalDate.parse(untilClean, formatter).atStartOfDay(untilZoneId).toInstant().toEpochMilli()
+                                    }
+                                } catch (e: Exception) {
+                                    null
+                                }
+                                val untilFormatted = untilMillis?.let { eventDateFormatter.format(Instant.ofEpochMilli(it)) } ?: untilStr
+                                Text(
+                                    text = "Until: $untilFormatted",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            } else if (!countStr.isNullOrBlank()) {
+                                Text(
+                                    text = "Ends after: $countStr occurrences",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            } else {
+                                Text(
+                                    text = "Until: No end date",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // Tags Details
