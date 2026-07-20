@@ -22,6 +22,15 @@ import com.example.mymeetings.domain.repository.MeetingRepository
 import com.example.mymeetings.theme.MyMeetingsTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import android.Manifest
+import android.app.NotificationManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import javax.inject.Inject
@@ -81,26 +90,95 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    val prefs = remember { getSharedPreferences("mymeetings_settings", android.content.Context.MODE_PRIVATE) }
-                    var showSetupWizard by remember { mutableStateOf(!prefs.getBoolean("first_launch_done", false)) }
-
                     if (isProcessingIntent) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }
-                    } else if (showSetupWizard) {
-                        com.example.mymeetings.ui.permissions.PermissionSetupWizard(
-                            onSetupComplete = {
-                                prefs.edit().putBoolean("first_launch_done", true).apply()
-                                showSetupWizard = false
-                            }
-                        )
                     } else {
                         MainNavigation()
                     }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        checkAndRequestPermissions()
+    }
+
+    private fun checkAndRequestPermissions() {
+        val prefs = getSharedPreferences("mymeetings_settings", Context.MODE_PRIVATE)
+        val firstLaunchDone = prefs.getBoolean("first_launch_done", false)
+        if (firstLaunchDone) return
+
+        // 1. Post Notifications (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+                return
+            }
+        }
+
+        // 2. Battery Optimization exemption dialog (Android 6.0+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    startActivity(intent)
+                }
+                return
+            }
+        }
+
+        // 3. Draw Over Other Apps Overlay (Android 6.0+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+                return
+            }
+        }
+
+        // 4. Exact Alarms (Android 12+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            if (!alarmManager.canScheduleExactAlarms()) {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                }
+                return
+            }
+        }
+
+        // 5. Bypass Do Not Disturb (Android 6.0+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (!nm.isNotificationPolicyAccessGranted) {
+                val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                startActivity(intent)
+                return
+            }
+        }
+
+        // Once all permissions have been requested/approved sequentially, mark first launch as completed
+        prefs.edit().putBoolean("first_launch_done", true).apply()
     }
 
     /**
