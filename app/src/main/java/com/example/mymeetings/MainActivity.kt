@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         // Shared navigation target between MainActivity creation and MainNavigation
         var initialDestination: NavKey = Main
+        private val promptedPermissionsThisSession = mutableSetOf<String>()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,14 +109,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkAndRequestPermissions() {
-        val prefs = getSharedPreferences("mymeetings_settings", Context.MODE_PRIVATE)
-        val firstLaunchDone = prefs.getBoolean("first_launch_done", false)
-        if (firstLaunchDone) return
-
         // 1. Post Notifications (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+            val permission = Manifest.permission.POST_NOTIFICATIONS
+            if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
+                if (!promptedPermissionsThisSession.contains(permission)) {
+                    promptedPermissionsThisSession.add(permission)
+                    ActivityCompat.requestPermissions(this, arrayOf(permission), 1001)
+                }
                 return
             }
         }
@@ -124,14 +125,18 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-                try {
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:$packageName")
+                val permissionKey = "BATTERY_OPTIMIZATION"
+                if (!promptedPermissionsThisSession.contains(permissionKey)) {
+                    promptedPermissionsThisSession.add(permissionKey)
+                    try {
+                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        startActivity(intent)
                     }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                    startActivity(intent)
                 }
                 return
             }
@@ -140,10 +145,14 @@ class MainActivity : ComponentActivity() {
         // 3. Draw Over Other Apps Overlay (Android 6.0+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
-                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                    data = Uri.parse("package:$packageName")
+                val permissionKey = "DRAW_OVERLAYS"
+                if (!promptedPermissionsThisSession.contains(permissionKey)) {
+                    promptedPermissionsThisSession.add(permissionKey)
+                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
                 }
-                startActivity(intent)
                 return
             }
         }
@@ -152,16 +161,20 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             if (!alarmManager.canScheduleExactAlarms()) {
-                try {
-                    val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                        data = Uri.parse("package:$packageName")
+                val permissionKey = "EXACT_ALARMS"
+                if (!promptedPermissionsThisSession.contains(permissionKey)) {
+                    promptedPermissionsThisSession.add(permissionKey)
+                    try {
+                        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
                     }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                        data = Uri.parse("package:$packageName")
-                    }
-                    startActivity(intent)
                 }
                 return
             }
@@ -171,14 +184,15 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (!nm.isNotificationPolicyAccessGranted) {
-                val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
-                startActivity(intent)
+                val permissionKey = "DND_BYPASS"
+                if (!promptedPermissionsThisSession.contains(permissionKey)) {
+                    promptedPermissionsThisSession.add(permissionKey)
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)
+                    startActivity(intent)
+                }
                 return
             }
         }
-
-        // Once all permissions have been requested/approved sequentially, mark first launch as completed
-        prefs.edit().putBoolean("first_launch_done", true).apply()
     }
 
     /**
