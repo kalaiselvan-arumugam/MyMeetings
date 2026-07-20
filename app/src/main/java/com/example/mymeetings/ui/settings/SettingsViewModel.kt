@@ -29,6 +29,15 @@ class SettingsViewModel @Inject constructor(
     private val _alarmRingtoneUri = MutableStateFlow(prefs.getString("alarm_ringtone_uri", "") ?: "")
     val alarmRingtoneUri: StateFlow<String> = _alarmRingtoneUri.asStateFlow()
 
+    private val _silentModeBypass = MutableStateFlow(prefs.getBoolean("silent_mode_bypass", false))
+    val silentModeBypass: StateFlow<Boolean> = _silentModeBypass.asStateFlow()
+
+    private val _alarmVibrationEnabled = MutableStateFlow(prefs.getBoolean("alarm_vibration_enabled", true))
+    val alarmVibrationEnabled: StateFlow<Boolean> = _alarmVibrationEnabled.asStateFlow()
+
+    private val _alarmVibrationPattern = MutableStateFlow(prefs.getString("alarm_vibration_pattern", "Default") ?: "Default")
+    val alarmVibrationPattern: StateFlow<String> = _alarmVibrationPattern.asStateFlow()
+
     fun updateDefaultGuestName(name: String) {
         _defaultGuestName.value = name
         prefs.edit().putString("default_guest_name", name).apply()
@@ -37,6 +46,21 @@ class SettingsViewModel @Inject constructor(
     fun updateAlarmRingtoneUri(uri: String) {
         _alarmRingtoneUri.value = uri
         prefs.edit().putString("alarm_ringtone_uri", uri).apply()
+    }
+
+    fun updateSilentModeBypass(enabled: Boolean) {
+        _silentModeBypass.value = enabled
+        prefs.edit().putBoolean("silent_mode_bypass", enabled).apply()
+    }
+
+    fun updateAlarmVibrationEnabled(enabled: Boolean) {
+        _alarmVibrationEnabled.value = enabled
+        prefs.edit().putBoolean("alarm_vibration_enabled", enabled).apply()
+    }
+
+    fun updateAlarmVibrationPattern(pattern: String) {
+        _alarmVibrationPattern.value = pattern
+        prefs.edit().putString("alarm_vibration_pattern", pattern).apply()
     }
 
     /**
