@@ -270,8 +270,13 @@ class AlarmService : Service() {
             else -> longArrayOf(0, 500, 500, 500, 500) // Default
         }
 
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, 0))
+            vibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, 0), audioAttributes)
         } else {
             @Suppress("DEPRECATION")
             vibrator?.vibrate(pattern, 0)
@@ -282,8 +287,14 @@ class AlarmService : Service() {
         stopVibration()
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
         val pattern = longArrayOf(0, 150, 100, 150) // Short double pulse
+        
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1))
+            vibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1), audioAttributes)
         } else {
             @Suppress("DEPRECATION")
             vibrator?.vibrate(pattern, -1)
