@@ -86,22 +86,27 @@ class AlarmService : Service() {
     }
 
     private fun handleTrigger(meetingId: Long, occurrenceTime: Long, offset: Int, title: String) {
-        // Play Alarm Sound
-        playAlarmSound()
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        val isInCall = audioManager.mode == android.media.AudioManager.MODE_IN_CALL ||
+                audioManager.mode == android.media.AudioManager.MODE_IN_COMMUNICATION
 
-        // Build notification
-        val notification = buildAlarmNotification(meetingId, occurrenceTime, offset, title)
-
-        // Run as foreground service to ensure it rings reliably in background
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (isInCall) {
+            // Active Call Behavior: Subtle vibrate pulse + Heads-up notification only (No Ringtone, No IncomingCallActivity)
+            triggerSubtleVibration()
+            val notification = buildCallNotification(meetingId, occurrenceTime, offset, title, isInCall = true)
             startForeground(NOTIFICATION_ID_BASE + meetingId.toInt(), notification)
         } else {
+            // Normal Behavior: Play Ringtone/Vibrate + Launch IncomingCallActivity
+            playAlarmSound()
+            triggerCustomVibration()
+            val notification = buildCallNotification(meetingId, occurrenceTime, offset, title, isInCall = false)
             startForeground(NOTIFICATION_ID_BASE + meetingId.toInt(), notification)
         }
     }
 
     private fun handleJoin(meetingId: Long, occurrenceTime: Long) {
         stopAlarmSound()
+        stopVibration()
         
         serviceScope.launch {
             val meeting = repository.getMeetingById(meetingId)
@@ -141,6 +146,7 @@ class AlarmService : Service() {
 
     private fun handleSnooze(meetingId: Long, occurrenceTime: Long, offset: Int, title: String) {
         stopAlarmSound()
+        stopVibration()
 
         val snoozeMinutes = getSnoozeDurationFromPrefs()
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
@@ -182,6 +188,7 @@ class AlarmService : Service() {
 
     private fun handleDismiss(meetingId: Long) {
         stopAlarmSound()
+        stopVibration()
 
         serviceScope.launch {
             val meeting = repository.getMeetingById(meetingId)
@@ -213,6 +220,16 @@ class AlarmService : Service() {
 
         try {
             val ringtone = RingtoneManager.getRingtone(applicationContext, uri)
+            
+            // Bypass Silent/DND modes if enabled in preferences
+            if (isSilentModeBypassEnabled()) {
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+                ringtone.audioAttributes = audioAttributes
+            }
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 ringtone.isLooping = true
             }
@@ -240,14 +257,62 @@ class AlarmService : Service() {
         }
     }
 
-    private fun buildAlarmNotification(meetingId: Long, occurrenceTime: Long, offset: Int, title: String): Notification {
+    private var vibrator: android.os.Vibrator? = null
+
+    private fun triggerCustomVibration() {
+        stopVibration()
+        if (!isVibrationEnabled()) return
+
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+        val pattern = when (getVibrationPattern()) {
+            "Heartbeat" -> longArrayOf(0, 100, 200, 100, 500, 100, 200, 100, 1000)
+            "Fast" -> longArrayOf(0, 200, 100, 200, 100, 200, 100, 200, 100)
+            else -> longArrayOf(0, 500, 500, 500, 500) // Default
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, 0))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(pattern, 0)
+        }
+    }
+
+    private fun triggerSubtleVibration() {
+        stopVibration()
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator
+        val pattern = longArrayOf(0, 150, 100, 150) // Short double pulse
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator?.vibrate(android.os.VibrationEffect.createWaveform(pattern, -1))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(pattern, -1)
+        }
+    }
+
+    private fun stopVibration() {
+        try {
+            vibrator?.cancel()
+            vibrator = null
+        } catch (e: Exception) {
+            // Ignore
+        }
+    }
+
+    private fun buildCallNotification(
+        meetingId: Long,
+        occurrenceTime: Long,
+        offset: Int,
+        title: String,
+        isInCall: Boolean
+    ): Notification {
         val formatTime = DateTimeFormatter.ofPattern("hh:mm a")
             .withZone(ZoneId.systemDefault())
             .format(Instant.ofEpochMilli(occurrenceTime))
 
         val text = if (offset == 0) "Meeting is starting now! ($formatTime)" else "Starting in $offset minutes ($formatTime)"
 
-        // Notification Action PendingIntents
+        // Action PendingIntents
         val joinIntent = PendingIntent.getBroadcast(
             this,
             (meetingId.hashCode() * 31) + 101,
@@ -282,18 +347,35 @@ class AlarmService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(title)
             .setContentText(text)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .addAction(android.R.drawable.ic_menu_call, "Join Teams", joinIntent)
-            .addAction(android.R.drawable.ic_lock_idle_alarm, "Snooze", snoozeIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", dismissIntent)
-            .build()
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Decline", dismissIntent)
+
+        if (!isInCall) {
+            // Full-screen incoming caller activity target
+            val fullScreenIntent = Intent(this, com.example.mymeetings.ui.incoming.IncomingCallActivity::class.java).apply {
+                putExtra("MEETING_ID", meetingId)
+                putExtra("OCCURRENCE_TIME", occurrenceTime)
+            }
+            val fullScreenPendingIntent = PendingIntent.getActivity(
+                this,
+                (meetingId.hashCode() * 31) + 104,
+                fullScreenIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.setFullScreenIntent(fullScreenPendingIntent, true)
+            // Normal notifications can also show snooze action
+            builder.addAction(android.R.drawable.ic_lock_idle_alarm, "Remind in 5m", snoozeIntent)
+        }
+
+        return builder.build()
     }
 
     private fun createNotificationChannel() {
@@ -330,6 +412,21 @@ class AlarmService : Service() {
     private fun getSnoozeDurationFromPrefs(): Int {
         val prefs = getSharedPreferences("mymeetings_settings", Context.MODE_PRIVATE)
         return prefs.getInt("snooze_duration_minutes", 5)
+    }
+
+    private fun isSilentModeBypassEnabled(): Boolean {
+        val prefs = getSharedPreferences("mymeetings_settings", Context.MODE_PRIVATE)
+        return prefs.getBoolean("silent_mode_bypass", false)
+    }
+
+    private fun isVibrationEnabled(): Boolean {
+        val prefs = getSharedPreferences("mymeetings_settings", Context.MODE_PRIVATE)
+        return prefs.getBoolean("alarm_vibration_enabled", true)
+    }
+
+    private fun getVibrationPattern(): String {
+        val prefs = getSharedPreferences("mymeetings_settings", Context.MODE_PRIVATE)
+        return prefs.getString("alarm_vibration_pattern", "Default") ?: "Default"
     }
 
     override fun onDestroy() {
