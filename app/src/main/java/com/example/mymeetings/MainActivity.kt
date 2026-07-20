@@ -81,10 +81,20 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    val prefs = remember { getSharedPreferences("mymeetings_settings", android.content.Context.MODE_PRIVATE) }
+                    var showSetupWizard by remember { mutableStateOf(!prefs.getBoolean("first_launch_done", false)) }
+
                     if (isProcessingIntent) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }
+                    } else if (showSetupWizard) {
+                        com.example.mymeetings.ui.permissions.PermissionSetupWizard(
+                            onSetupComplete = {
+                                prefs.edit().putBoolean("first_launch_done", true).apply()
+                                showSetupWizard = false
+                            }
+                        )
                     } else {
                         MainNavigation()
                     }
